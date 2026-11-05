@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>채널 지표 보드</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='16' width='5' height='12' rx='1.5' fill='%232a78d6'/%3E%3Crect x='13.5' y='9' width='5' height='19' rx='1.5' fill='%232a78d6'/%3E%3Crect x='23' y='4' width='5' height='24' rx='1.5' fill='%23eb6834'/%3E%3C/svg%3E">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --card: #ffffff;
+  --ink: #0b0b0b; --ink2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11,11,11,0.10);
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;
+  --good: #0ca30c; --good-ink: #006300; --warn: #fab219; --crit: #d03b3b;
+  --r250: #86b6ef; --r350: #5598e7; --r450: #2a78d6; --r550: #1c5cab; --r650: #104281;
+  --chip: #f0efec; --hover: rgba(42,120,214,0.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --card: #1a1a19;
+    --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+    --good-ink: #0ca30c;
+    --r250: #86b6ef; --r350: #6da7ec; --r450: #3987e5; --r550: #256abf; --r650: #184f95;
+    --chip: #262624; --hover: rgba(57,135,229,0.10);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --card: #1a1a19;
+  --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+  --good-ink: #0ca30c;
+  --r250: #86b6ef; --r350: #6da7ec; --r450: #3987e5; --r550: #256abf; --r650: #184f95;
+  --chip: #262624; --hover: rgba(57,135,229,0.10);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--page); color: var(--ink);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 16px 16px 48px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin: 4px 0 12px; }
+h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+.upd { color: var(--muted); font-size: 13px; }
+.tabs { display: flex; gap: 6px; margin: 8px 0 16px; overflow-x: auto; }
+.tab { border: 1px solid var(--ring); background: var(--card); color: var(--ink2); padding: 8px 14px; border-radius: 999px;
+  font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--page); border-color: var(--ink); }
+.grid { display: grid; gap: 12px; }
+.kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 720px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.card { background: var(--card); border: 1px solid var(--ring); border-radius: 14px; padding: 14px 16px; min-width: 0; }
+.kpi .lab { color: var(--ink2); font-size: 13px; }
+.kpi .val { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin-top: 2px; }
+.kpi .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.two { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
+@media (max-width: 820px) { .two { grid-template-columns: minmax(0, 1fr); } }
+h2 { font-size: 15px; margin: 0 0 2px; }
+.desc { color: var(--muted); font-size: 12.5px; margin: 0 0 10px; }
+.chart { position: relative; height: 220px; }
+.chart.tall { height: 280px; }
+.bands { display: flex; flex-wrap: wrap; gap: 8px; }
+.band { flex: 1 1 110px; border-radius: 12px; padding: 10px 12px; background: var(--chip); }
+.band .n { font-size: 22px; font-weight: 700; }
+.band .t { font-size: 12.5px; color: var(--ink2); }
+.band i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+section { margin-top: 12px; }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.tools input, .tools select { font: inherit; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--ring); background: var(--surface); color: var(--ink); }
+.tools input { flex: 1 1 200px; min-width: 0; }
+.tbl { overflow-x: auto; border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+th, td { padding: 8px 8px; border-bottom: 1px solid var(--grid); text-align: right; white-space: nowrap; }
+th { color: var(--ink2); font-weight: 600; font-size: 12.5px; cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--card); }
+th.l, td.l { text-align: left; }
+td.title { width: 210px; max-width: 210px; min-width: 170px; white-space: normal; }
+td.title .tt { font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.35; }
+td.title .p { color: var(--muted); font-size: 12px; font-weight: 400; margin-top: 2px; }
+/* 폰 카드(표 대신) — 칸 위치가 영상마다 같게 고정 */
+.vlist { display: none; }
+.vc { padding: 14px 2px; border-bottom: 1px solid var(--grid); cursor: pointer; }
+.vc-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.vc-title { font-size: 15px; font-weight: 600; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.vc-meta { color: var(--muted); font-size: 12px; margin-top: 3px; }
+.vc-top .st { flex: none; margin-top: 1px; }
+.vc-main { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: 10px; }
+.vc-views { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.vc-views small { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 4px; }
+.vc-grow { font-size: 12.5px; color: var(--ink2); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.vc-grow b { color: var(--ink); font-weight: 600; }
+.vc-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 8px; gap: 4px; margin-top: 10px; background: var(--chip); border-radius: 10px; padding: 8px 10px; }
+.vc-stats div { min-width: 0; }
+.vc-stats span { display: block; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.vc-stats b { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+@media (max-width: 720px) {
+  .wrap { padding: 12px 12px 40px; }
+  .card { padding: 12px; border-radius: 12px; }
+  .kpi .val { font-size: 22px; }
+  .tbl { display: none; }
+  .vlist { display: block; }
+  .glossary { font-size: 12.5px; }
+  .tools select { flex: 1 1 40%; }
+  ul.terms { columns: 1; }
+  .chart { height: 200px; }
+  .chart.tall { height: 240px; }
+}
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--hover); }
+th[aria-sort="descending"]::after { content: " ↓"; } th[aria-sort="ascending"]::after { content: " ↑"; }
+.st { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--ink2); }
+.st.up { color: var(--good-ink); } .st.flat { color: var(--muted); }
+.dim { color: var(--muted); }
+.hi { color: var(--good-ink); font-weight: 600; }
+.lo { color: var(--crit); }
+ul.terms { list-style: none; padding: 0; margin: 0; columns: 2; column-gap: 20px; font-size: 13.5px; }
+ul.terms li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--grid); break-inside: avoid; }
+ul.terms li span:last-child { color: var(--ink2); font-variant-numeric: tabular-nums; }
+dialog { border: 1px solid var(--ring); border-radius: 16px; padding: 0; width: min(920px, calc(100vw - 24px)); background: var(--card); color: var(--ink); }
+dialog::backdrop { background: rgba(0,0,0,0.45); }
+.dlg-h { display: flex; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--grid); }
+.dlg-h h3 { margin: 0; font-size: 16px; }
+.dlg-b { padding: 14px 16px; display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 720px) { .dlg-b { grid-template-columns: minmax(0, 1fr); } }
+.x { border: 0; background: var(--chip); color: var(--ink); border-radius: 10px; width: 34px; height: 34px; font-size: 18px; cursor: pointer; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--ink2); padding: 0 16px 14px; }
+.facts b { color: var(--ink); }
+.note { color: var(--muted); font-size: 12.5px; margin-top: 14px; }
+.glossary { display: grid; gap: 6px; background: var(--chip); border-radius: 10px; padding: 10px 12px; font-size: 13px; color: var(--ink2); margin-bottom: 10px; }
+.glossary b { color: var(--ink); }
+.legend { display: flex; gap: 14px; font-size: 12.5px; color: var(--ink2); margin: -4px 0 6px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>채널 지표 보드</h1>
+    <span class="upd" id="upd"></span>
+  </header>
+  <div class="tabs" role="tablist" id="tabs"></div>
+  <main id="view"></main>
+  <p class="note">조회·좋아요·댓글은 1시간마다 찍은 기록으로 3시간마다 갱신합니다. 평균 시청률·끝까지 본 %·유입·검색어·시청자는 유튜브 분석 데이터라 하루 한 번 받고, 원래 1~2일 늦게 들어옵니다(최근 영상은 '-'). 벽 단계 기준: docs/지표분석_1028.md.</p>
+  <p class="note">이 페이지는 채널 운영자가 자기 유튜브 채널(이거핫하다는데? · 윤현빈 블로그)의 업로드와 지표 확인에 쓰는 도구 issue-upload의 안내 페이지이기도 합니다. <a href="privacy.html">개인정보처리방침</a></p>
+</div>
+<dialog id="dlg"></dialog>
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt = n => n == null ? "-" : Number(n).toLocaleString("ko-KR");
+const short = n => n == null ? "-" : n >= 1e4 ? (n / 1e4).toFixed(n >= 1e5 ? 0 : 1) + "만" : n >= 1e3 ? (n / 1e3).toFixed(1) + "천" : String(n);
+const pct = (n, d = 0) => n == null ? "-" : n.toFixed(d) + "%";
+const BANDS = [["시험 중", "--r250"], ["1천 벽", "--r350"], ["2~5천 벽", "--r450"], ["1~3만 벽", "--r550"], ["돌파", "--r650"]];
+let charts = [], data = {}, current = null, sortKey = "published", sortDir = -1;
+const SORTS = [["published", "최신순"], ["views", "조회 많은 순"], ["v24", "1일 조회 순"], ["v72", "3일 조회 순"], ["avp", "평균 시청률 순"], ["r_end", "끝까지 본 % 순"], ["rel", "비슷한 쇼츠 대비 순"], ["subs", "구독 만든 순"], ["lr", "좋아요율 순"], ["comments", "댓글 순"]];
+
+function baseOpts(extra = {}) {
+  const ink2 = css("--ink2"), grid = css("--grid"), muted = css("--muted");
+  return Object.assign({
+    responsive: true, maintainAspectRatio: false, animation: false,
+    interaction: { mode: "index", intersect: false },
+    plugins: { legend: { display: false }, tooltip: { backgroundColor: css("--card"), titleColor: css("--ink"), bodyColor: ink2,
+      borderColor: css("--ring"), borderWidth: 1, padding: 10, displayColors: false } },
+    scales: {
+      x: { grid: { display: false }, ticks: { color: muted, maxRotation: 0, autoSkipPadding: 12, font: { size: 11 } }, border: { color: css("--axis") } },
+      y: { grid: { color: grid }, ticks: { color: muted, font: { size: 11 }, callback: v => short(v) }, border: { display: false }, beginAtZero: true }
+    }
+  }, extra);
+}
+function mk(el, cfg) { const c = new Chart(el, cfg); charts.push(c); return c; }
+
+async function load() {
+  const idx = await (await fetch("data/index.json?" + Date.now())).json();
+  $("#upd").textContent = "갱신 " + idx.updated.replace("T", " ").slice(0, 16);
+  const tabs = $("#tabs");
+  idx.channels.forEach((c, i) => {
+    const b = document.createElement("button");
+    b.className = "tab"; b.role = "tab"; b.textContent = c.name; b.dataset.p = c.profile;
+    b.onclick = () => show(c.profile);
+    tabs.appendChild(b);
+  });
+  let start = idx.channels[0].profile;
+  try { start = localStorage.getItem("cb-tab") || start; } catch (e) {}
+  start = new URLSearchParams(location.search).get("tab") || start;
+  show(idx.channels.some(c => c.profile === start) ? start : idx.channels[0].profile);
+}
+
+async function show(p) {
+  try { localStorage.setItem("cb-tab", p); } catch (e) {}
+  document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", t.dataset.p === p));
+  if (!data[p]) data[p] = await (await fetch(`data/${p}.json?` + Date.now())).json();
+  current = data[p];
+  render();
+  const vq = new URLSearchParams(location.search).get("v");
+  if (vq && current.videos.some(x => x.id === vq)) detail(vq);
+}
+
+function render() {
+  charts.forEach(c => c.destroy()); charts = [];
+  const d = current, V = d.videos;
+  const v7 = V.filter(v => v.age_h >= 24 && v.age_h < 24 * 8 && v.v24 != null);
+  const med = a => { const s = a.slice().sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : null; };
+  const counts = Object.fromEntries(BANDS.map(([b]) => [b, V.filter(v => v.band === b).length]));
+  const moving = V.filter(v => v.moving && v.band !== "시험 중").length;
+  $("#view").innerHTML = `
+  <div class="grid kpis">
+    <div class="card kpi"><div class="lab">누적 조회</div><div class="val">${fmt(d.channel.views)}</div><div class="sub">공개 ${V.length}편</div></div>
+    <div class="card kpi"><div class="lab">최근 24시간 조회</div><div class="val">${fmt(d.views_24h)}</div><div class="sub">시간별 기록 합</div></div>
+    <div class="card kpi"><div class="lab">구독자</div><div class="val">${fmt(d.channel.subs)}</div><div class="sub">1천 회당 ${(d.channel.subs / Math.max(1, d.channel.views) * 1000).toFixed(2)}명</div></div>
+    <div class="card kpi"><div class="lab">최근 7일 편당 24시간 조회</div><div class="val">${short(med(v7.map(v => v.v24)))}</div><div class="sub">중앙값 · ${v7.length}편</div></div>
+  </div>
+  <section class="card">
+    <h2>벽 단계</h2><p class="desc">지금 조회 구간 · 최근 6시간에 3% 이상 늘면 '성장 중'(지금 ${moving}편)</p>
+    <div class="bands">${BANDS.map(([b, c]) => `<div class="band"><div class="t"><i style="background:var(${c})"></i>${b}</div><div class="n">${counts[b]}</div></div>`).join("")}</div>
+  </section>
+  <div class="grid two">
+    <div class="card"><h2>시간당 조회</h2><p class="desc">최근 7일 · 채널 전체 · 기록 사이 증가를 시간당으로</p><div class="chart"><canvas id="cHour"></canvas></div></div>
+    <div class="card"><h2>날짜별 조회</h2><p class="desc">유튜브 분석 · 1~2일 늦음</p><div class="chart"><canvas id="cDay"></canvas></div></div>
+  </div>
+  <section class="card">
+    <h2>영상별</h2><p class="desc">줄을 누르면 조회가 늘어난 모양·좋아요/댓글·어디서 넘겼는지가 열립니다.</p>
+    <div class="glossary"><div><b>이탈율(넘김)</b> 유튜브 스튜디오의 '시청함 vs 넘김'은 API로 받을 수 없어서 여기엔 없어요. 스튜디오 영상별 분석에서 보세요.</div><div><b>비슷한 쇼츠 중</b> 같은 길이의 다른 쇼츠들과 비교한 유지율 순위. '상위 20%'면 비슷한 쇼츠 10개 중 8개보다 끝까지 더 붙잡았다는 뜻(유튜브가 계산).</div><div><b>평균 시청률</b> 영상 길이 대비 평균 몇 %를 봤나. 30초 영상을 평균 24초 봤으면 80%, <b>100%를 넘으면 끝까지 보고 다시 본 것</b>. 80% 아래면 대부분 1만을 못 넘었어요.</div><div><b>끝까지 본 %</b> 마지막 장면까지 남아 있던 시청자 비율. <b>80% 이상이면 크게 뜬 영상들 수준</b>(집에 가 83%, 야호 96%).</div><div><b>6시간·1일~7일</b> 공개하고 그만큼 지났을 때 조회(크게 뜬 영상은 2~5일째에 다시 커졌어요). <b>단계</b> 지금 조회가 어느 벽에 있는지, ▲ 최근 6시간에 3% 넘게 늘면 성장 중 / ■ 멈춤.</div></div>
+    <div class="tools"><input id="q" placeholder="제목 검색" value="${window._q || ""}">
+      <select id="fb"><option value="">모든 단계</option>${BANDS.map(([b]) => `<option ${window._fb === b ? "selected" : ""}>${b}</option>`).join("")}</select>
+      <select id="sk" aria-label="정렬">${SORTS.map(([k, n]) => `<option value="${k}" ${sortKey === k ? "selected" : ""}>${n}</option>`).join("")}</select></div>
+    <div class="tbl"><table><thead><tr>
+      <th class="l" data-k="published">영상</th><th data-k="len">길이</th><th data-k="views">조회</th><th data-k="v6">6시간</th><th data-k="v24">1일</th><th data-k="v48">2일</th><th data-k="v72">3일</th><th data-k="v168">7일</th>
+      <th data-k="avp" title="영상 길이 대비 평균 몇 % 봤나(100% 넘으면 다시 봄)">평균 시청률</th><th data-k="r_end" title="마지막 장면까지 남은 시청자 비율">끝까지 본 %</th><th data-k="rel" title="같은 길이 다른 쇼츠들과 비교한 유지율 순위">비슷한 쇼츠 중</th><th data-k="lr" title="조회 100번에 좋아요 몇 개">좋아요율</th><th data-k="comments">댓글</th><th data-k="shares">공유</th><th data-k="subs">구독+</th><th data-k="band">단계</th>
+    </tr></thead><tbody id="tb"></tbody></table></div>
+    <div class="vlist" id="vl"></div>
+    <div class="tools" style="margin:10px 0 0;justify-content:center"><button class="tab" id="more"></button></div>
+  </section>
+  <div class="grid two">
+    <div class="card"><h2>평균 시청률과 조회</h2><p class="desc">점 하나 = 영상(공개 2일 지난 것) · 오른쪽(많이 볼수록)일수록 위(조회 많음)로 가는지 · 세로는 10배 눈금</p><div class="chart tall"><canvas id="cScat"></canvas></div></div>
+    <div class="card"><h2>공개 시각과 24시간 조회</h2><p class="desc">점 하나 = 영상 · 가로 = 공개 시각(KST)</p><div class="chart tall"><canvas id="cHourPub"></canvas></div></div>
+  </div>
+  <div class="grid two">
+    <div class="card"><h2>유입 경로</h2><p class="desc">10/1 이후 조회 비중</p><div class="chart"><canvas id="cTr"></canvas></div></div>
+    <div class="card"><h2>시청자 나이·성별</h2><div class="legend"><span><i style="background:var(--s1)"></i>남성</span><span><i style="background:var(--s2)"></i>여성</span></div><div class="chart"><canvas id="cAge"></canvas></div></div>
+  </div>
+  <div class="grid two">
+    <div class="card"><h2>검색어</h2><p class="desc">검색으로 들어온 조회 상위</p><ul class="terms">${(d.search || []).map(s => `<li><span>${esc(s.insightTrafficSourceDetail)}</span><span>${fmt(s.views)}</span></li>`).join("") || "<li><span class='dim'>아직 없음</span></li>"}</ul></div>
+    <div class="card"><h2>나라·기기</h2><div class="chart"><canvas id="cCty"></canvas></div><p class="desc" style="margin-top:8px">${(d.device || []).map(x => `${x.deviceType} ${short(x.views)}`).join(" · ")}</p></div>
+  </div>
+  <div class="grid two">
+    <div class="card"><h2>공유된 곳</h2><p class="desc">10/1 이후 공유 횟수</p><ul class="terms" style="columns:1">${(d.sharing || []).map(x => `<li><span>${SHARE[x.sharingService] || x.sharingService}</span><span>${fmt(x.shares)}</span></li>`).join("") || "<li><span class='dim'>아직 없음</span></li>"}</ul></div>
+    <div class="card"><h2>어디서 · 누가 · 무엇으로</h2>
+      <ul class="terms" style="columns:1">
+        ${(d.playback || []).map(x => `<li><span>${PLAY[x.insightPlaybackLocationType] || x.insightPlaybackLocationType}</span><span>${pctOf(x.views, d.playback)}</span></li>`).join("")}
+        ${(d.subscribed || []).map(x => `<li><span>${x.subscribedStatus === "SUBSCRIBED" ? "구독자가 본 조회" : "구독 안 한 사람이 본 조회"}</span><span>${pctOf(x.views, d.subscribed)} · 평균 시청률 ${pct(x.averageViewPercentage)}</span></li>`).join("")}
+        ${(d.os || []).slice(0, 4).map(x => `<li><span>${OSN[x.operatingSystem] || x.operatingSystem}</span><span>${pctOf(x.views, d.os)}</span></li>`).join("")}
+        <li><span>수익</span><span>${(d.revenue || []).reduce((a, x) => a + (x.estimatedRevenue || 0), 0) > 0 ? "$" + (d.revenue || []).reduce((a, x) => a + (x.estimatedRevenue || 0), 0).toFixed(2) : "수익 창출 전"}</span></li>
+      </ul></div>
+  </div>`;
+  ["q", "fb"].forEach(id => $("#" + id).oninput = e => { window["_" + id] = e.target.value; table(); });
+  $("#sk").onchange = e => { sortKey = e.target.value; sortDir = -1; table(); };
+  document.querySelectorAll("th[data-k]").forEach(th => th.onclick = () => { const k = th.dataset.k; sortDir = sortKey === k ? -sortDir : -1; sortKey = k; table(); });
+  table(); chartsDraw();
+}
+
+const SHARE = { KAKAO: "카카오톡", COPY_PASTE: "링크 복사", OTHER: "기타", TWITTER: "X(트위터)", GMAIL: "Gmail", FACEBOOK: "페이스북", WHATS_APP: "왓츠앱", LINE: "라인", INSTAGRAM: "인스타그램", NAVER: "네이버", TELEGRAM: "텔레그램", SMS: "문자", DISCORD: "디스코드", REDDIT: "레딧", BAND: "밴드", THREADS: "스레드", DIRECT_SYSTEM_ACTIVITY_DIALOG: "휴대폰 공유 창", SYSTEM_ACTIVITY_DIALOG: "휴대폰 공유 창" };
+const OSN = { ANDROID: "안드로이드", IOS: "아이폰·아이패드", WINDOWS: "윈도 PC", MACINTOSH: "맥", LINUX: "리눅스", SMART_TV: "스마트 TV" };
+const PLAY = { SHORTS_FEED: "쇼츠 피드에서 재생", BROWSE: "홈·구독 목록에서", WATCH: "영상 페이지에서", EMBEDDED: "다른 사이트에 넣은 것", CHANNEL: "채널 페이지에서", SEARCH: "검색 결과에서" };
+const pctOf = (n, arr) => { const t = (arr || []).reduce((a, x) => a + (x.views || 0), 0) || 1; return (n / t * 100).toFixed(1) + "%"; };
+function relTxt(v) { if (v.rel == null) return "<span class='dim'>-</span>"; const top = Math.max(1, Math.round((1 - v.rel) * 100)); return `<span class="${v.rel >= 0.7 ? "hi" : v.rel < 0.4 ? "lo" : ""}">상위 ${top}%</span>`; }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+function spark(v) {
+  const pts = (v.curve || []).filter(p => p[0] <= 168);
+  if (pts.length < 2) return "<span class='dim'>-</span>";
+  const W = 90, H = 24, mx = Math.max(...pts.map(p => p[0])), my = Math.max(...pts.map(p => p[1])) || 1;
+  const d = pts.map(p => `${(p[0] / mx * W).toFixed(1)},${(H - 2 - p[1] / my * (H - 4)).toFixed(1)}`).join(" ");
+  return `<svg width="${W}" height="${H}" aria-hidden="true"><polyline points="${d}" fill="none" stroke="${css("--s1")}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
+
+function table() {
+  const q = (window._q || "").trim(), fb = window._fb || "";
+  let V = current.videos.map(v => Object.assign(v, { lr: v.views ? v.likes / v.views * 100 : null }))
+    .filter(v => (!q || v.title.includes(q)) && (!fb || v.band === fb));
+  const order = Object.fromEntries(BANDS.map(([b], i) => [b, i]));
+  V.sort((a, b) => {
+    let x = a[sortKey], y = b[sortKey];
+    if (sortKey === "band") { x = order[x]; y = order[y]; }
+    if (x == null) return 1; if (y == null) return -1;
+    return (x > y ? 1 : x < y ? -1 : 0) * sortDir;
+  });
+  document.querySelectorAll("th[data-k]").forEach(th => th.setAttribute("aria-sort", th.dataset.k === sortKey ? (sortDir < 0 ? "descending" : "ascending") : "none"));
+  const total = V.length, lim = window._all ? total : 30;
+  V = V.slice(0, lim);
+  const more = $("#more");
+  more.style.display = total > 30 ? "" : "none";
+  more.textContent = window._all ? "30편만 보기" : `전체 ${total}편 보기`;
+  more.onclick = () => { window._all = !window._all; table(); };
+  $("#tb").innerHTML = V.map(v => {
+    const avp = v.avp == null ? "<span class='dim'>-</span>" : `<span class="${v.avp >= 100 ? "hi" : v.avp < 80 ? "lo" : ""}">${pct(v.avp)}</span>`;
+    const re = v.r_end == null ? "<span class='dim'>-</span>" : `<span class="${v.r_end >= 0.8 ? "hi" : v.r_end < 0.5 ? "lo" : ""}">${Math.round(v.r_end * 100)}%</span>`;
+    const st = v.band === "시험 중" ? `<span class="st">시험 중</span>` : `<span class="st ${v.moving ? "up" : "flat"}">${v.moving ? "▲ 성장" : "■ 정체"} · ${v.band}</span>`;
+    const len = v.len > 40 ? `<span class="lo">${v.len}s</span>` : `${v.len}s`;
+    return `<tr data-id="${v.id}"><td class="l title"><div class="tt" title="${esc(v.title)}">${esc(v.title)}</div><div class="p">${v.pub_kst.slice(5)} · ${len}</div></td>
+      <td class="len" data-l="길이">${len}</td><td class="big" data-l="조회"><b>${fmt(v.views)}</b></td><td data-l="6시간">${short(v.v6)}</td><td data-l="1일">${short(v.v24)}</td><td data-l="2일">${short(v.v48)}</td><td data-l="3일">${short(v.v72)}</td><td data-l="7일">${short(v.v168)}</td>
+      <td data-l="평균 시청률">${avp}</td><td data-l="끝까지 본 %">${re}</td>
+      <td>${relTxt(v)}</td><td data-l="좋아요율">${v.lr == null ? "-" : v.lr.toFixed(1)}</td><td data-l="댓글">${fmt(v.comments)}</td><td data-l="공유">${v.shares == null ? "-" : fmt(v.shares)}</td><td>${v.subs == null ? "-" : "+" + v.subs}</td><td class="stc" data-l="단계">${st}</td></tr>`;
+  }).join("");
+  $("#vl").innerHTML = V.map(v => {
+    const avp = v.avp == null ? "<b class='dim'>-</b>" : `<b class="${v.avp >= 100 ? "hi" : v.avp < 80 ? "lo" : ""}">${pct(v.avp)}</b>`;
+    const re = v.r_end == null ? "<b class='dim'>-</b>" : `<b class="${v.r_end >= 0.8 ? "hi" : v.r_end < 0.5 ? "lo" : ""}">${Math.round(v.r_end * 100)}%</b>`;
+    const st = v.band === "시험 중" ? `<span class="st">시험 중</span>` : `<span class="st ${v.moving ? "up" : "flat"}">${v.moving ? "▲" : "■"} ${v.band}</span>`;
+    const len = v.len > 40 ? `<span class="lo">${v.len}초</span>` : `${v.len}초`;
+    const g = (n, k) => `${n} <b>${v[k] == null ? "-" : short(v[k])}</b>`;
+    return `<div class="vc" data-id="${v.id}">
+      <div class="vc-top"><div><div class="vc-title">${esc(v.title)}</div><div class="vc-meta">${v.pub_kst.slice(5)} · ${len}</div></div>${st}</div>
+      <div class="vc-main"><div class="vc-views">${fmt(v.views)}<small>회</small></div><div class="vc-grow">${g("1일", "v24")} · ${g("3일", "v72")} · ${g("7일", "v168")}</div></div>
+      <div class="vc-stats"><div><span>평균 시청률</span>${avp}</div><div><span>끝까지 본</span>${re}</div><div><span>비슷한 쇼츠 중</span><b>${relTxt(v)}</b></div><div><span>좋아요율</span><b>${v.lr == null ? "-" : v.lr.toFixed(1) + "%"}</b></div><div><span>댓글</span><b>${fmt(v.comments)}</b></div><div><span>구독</span><b>${v.subs == null ? "-" : "+" + v.subs}</b></div></div>
+    </div>`;
+  }).join("");
+  document.querySelectorAll("#tb tr, #vl .vc").forEach(el => el.onclick = () => detail(el.dataset.id));
+}
+
+function chartsDraw() {
+  const d = current, s1 = css("--s1"), s2 = css("--s2");
+  const bar = (labels, vals, color = s1) => ({ type: "bar", data: { labels, datasets: [{ data: vals, backgroundColor: color, borderRadius: 4, borderSkipped: "start", maxBarThickness: 22 }] } });
+  const hl = d.hourly || [];
+  mk($("#cHour"), Object.assign(bar(hl.map(h => h[0].slice(5, 13).replace("T", " ") + "시"), hl.map(h => h[1])), { options: baseOpts({ scales: Object.assign(baseOpts().scales, { x: Object.assign(baseOpts().scales.x, { ticks: Object.assign(baseOpts().scales.x.ticks, { maxTicksLimit: 7, callback: function (v) { return this.getLabelForValue(v); } }) }) }) }) }));
+  const dy = (d.daily || []).filter(x => x.views > 0);
+  mk($("#cDay"), Object.assign(bar(dy.map(x => x.day.slice(5)), dy.map(x => x.views)), { options: baseOpts({ plugins: Object.assign(baseOpts().plugins, {
+    tooltip: Object.assign(baseOpts().plugins.tooltip, { callbacks: { label: c => { const x = dy[c.dataIndex]; return [`조회 ${fmt(x.views)}`, `좋아요 ${fmt(x.likes)} · 댓글 ${fmt(x.comments)}`, `공유 ${fmt(x.shares)} · 구독 +${x.subscribersGained}`]; } } }) }) }) }));
+  const old = d.videos.filter(v => v.age_h >= 48 && v.avp != null);
+  const dot = (pts, xTitle, xOpts = {}) => ({ type: "scatter", data: { datasets: [{ data: pts, backgroundColor: s1, borderColor: css("--card"), borderWidth: 2, pointRadius: 5, pointHoverRadius: 7 }] },
+    options: baseOpts({ interaction: { mode: "nearest", intersect: true }, plugins: Object.assign(baseOpts().plugins, { tooltip: Object.assign(baseOpts().plugins.tooltip, { callbacks: { title: c => c[0].raw.t, label: c => `${xTitle} ${c.raw.xl} · 조회 ${fmt(c.raw.y)}`} }) }),
+      scales: { x: Object.assign({ grid: { color: css("--grid") }, ticks: { color: css("--muted"), font: { size: 11 } }, border: { color: css("--axis") }, title: { display: true, text: xTitle, color: css("--muted") } }, xOpts),
+        y: { type: "logarithmic", grid: { color: css("--grid") }, ticks: { color: css("--muted"), font: { size: 11 }, callback: v => [100, 1000, 10000, 100000, 1000000].includes(v) ? short(v) : "" }, border: { display: false } } } }) });
+  const empty = (id, msg) => $(id).parentElement.insertAdjacentHTML("beforeend", `<p class='desc' style='position:absolute;top:42%;width:100%;text-align:center'>${msg}</p>`);
+  if (old.length) mk($("#cScat"), dot(old.map(v => ({ x: v.avp, y: Math.max(1, v.views), t: v.title, xl: pct(v.avp) })), "평균 시청률(%)"));
+  else empty("#cScat", "공개 2일 지난 영상의 분석 데이터가 아직 없어요");
+  const hp = d.videos.filter(v => v.v24 != null).map(v => { const h = +v.pub_kst.slice(11, 13) + +v.pub_kst.slice(14, 16) / 60; return { x: h, y: Math.max(1, v.v24), t: v.title, xl: v.pub_kst.slice(11) }; });
+  mk($("#cHourPub"), dot(hp, "공개 시각", { min: 0, max: 24, ticks: { stepSize: 3, color: css("--muted"), font: { size: 11 } } }));
+  const KO = { SHORTS: "쇼츠 피드", SUBSCRIBER: "구독자", YT_SEARCH: "검색", YT_OTHER_PAGE: "기타 유튜브", YT_CHANNEL: "채널 페이지", RELATED_VIDEO: "추천 영상", EXT_URL: "외부", NOTIFICATION: "알림", PLAYLIST: "재생목록", SHORTS_CONTENT_LINKS: "쇼츠 링크", NO_LINK_OTHER: "직접", HASHTAGS: "해시태그", SOUND_PAGE: "사운드", END_SCREEN: "최종 화면" };
+  const tr = (d.traffic || []).slice(0, 6), tt = (d.traffic || []).reduce((a, x) => a + x.views, 0) || 1;
+  mk($("#cTr"), { type: "bar", data: { labels: tr.map(x => KO[x.insightTrafficSourceType] || x.insightTrafficSourceType), datasets: [{ data: tr.map(x => x.views / tt * 100), backgroundColor: s1, borderRadius: 4, borderSkipped: "start", maxBarThickness: 18 }] },
+    options: baseOpts({ indexAxis: "y", plugins: Object.assign(baseOpts().plugins, { tooltip: Object.assign(baseOpts().plugins.tooltip, { callbacks: { label: c => `${c.raw.toFixed(1)}% · ${fmt(tr[c.dataIndex].views)}회` } }) }),
+      scales: { x: { grid: { color: css("--grid") }, ticks: { color: css("--muted"), callback: v => v + "%" }, border: { display: false }, beginAtZero: true, max: 100 }, y: { grid: { display: false }, ticks: { color: css("--ink2") }, border: { color: css("--axis") } } } }) });
+  const ages = ["age13-17", "age18-24", "age25-34", "age35-44", "age45-54", "age55-64", "age65-"];
+  const ag = (g) => ages.map(a => ((d.age_gender || []).find(x => x.ageGroup === a && x.gender === g) || {}).viewerPercentage || 0);
+  mk($("#cAge"), { type: "bar", data: { labels: ages.map(a => a.replace("age", "").replace("-", "~").replace(/~$/, "+")), datasets: [
+    { label: "남성", data: ag("male"), backgroundColor: s1, borderRadius: 4, borderSkipped: "start", maxBarThickness: 16 },
+    { label: "여성", data: ag("female"), backgroundColor: s2, borderRadius: 4, borderSkipped: "start", maxBarThickness: 16 }] },
+    options: baseOpts({ plugins: Object.assign(baseOpts().plugins, { tooltip: Object.assign(baseOpts().plugins.tooltip, { displayColors: true, callbacks: { label: c => `${c.dataset.label} ${c.raw.toFixed(1)}%` } }) }),
+      scales: { x: { grid: { display: false }, ticks: { color: css("--muted") }, border: { color: css("--axis") } }, y: { grid: { color: css("--grid") }, ticks: { color: css("--muted"), callback: v => v + "%" }, border: { display: false }, beginAtZero: true } } }) });
+  const cty = (d.country || []).slice(0, 6), ct = cty.reduce((a, x) => a + x.views, 0) || 1;
+  mk($("#cCty"), { type: "bar", data: { labels: cty.map(x => x.country), datasets: [{ data: cty.map(x => x.views), backgroundColor: s1, borderRadius: 4, borderSkipped: "start", maxBarThickness: 22 }] },
+    options: baseOpts({ plugins: Object.assign(baseOpts().plugins, { tooltip: Object.assign(baseOpts().plugins.tooltip, { callbacks: { label: c => `${fmt(c.raw)}회` } }) }) }) });
+}
+
+let dcharts = [];
+function detail(id) {
+  const v = current.videos.find(x => x.id === id), dlg = $("#dlg");
+  dcharts.forEach(c => c.destroy()); dcharts = [];
+  const tr = v.traffic || {}, tt = Object.values(tr).reduce((a, b) => a + b, 0) || 1;
+  dlg.innerHTML = `<div class="dlg-h"><div><h3>${esc(v.title)}</h3><div class="upd">${v.pub_kst} · ${v.len}초 · <a href="https://youtu.be/${v.id}" target="_blank" rel="noopener">영상 열기</a></div></div><button class="x" aria-label="닫기">×</button></div>
+    <div class="facts"><span>조회 <b>${fmt(v.views)}</b></span><span>6시간 <b>${short(v.v6)}</b> · 1일 <b>${short(v.v24)}</b> · 2일 <b>${short(v.v48)}</b> · 3일 <b>${short(v.v72)}</b> · 7일 <b>${short(v.v168)}</b></span>
+      <span>평균 시청률 <b>${pct(v.avp)}</b></span><span>끝까지 본 <b>${v.r_end == null ? "-" : Math.round(v.r_end * 100) + "%"}</b></span><span>첫 장면 재생 <b>${v.r_start == null ? "-" : "평균 " + v.r_start.toFixed(1) + "번"}</b> <span class="dim">(1번 넘으면 다시 본 사람이 많음)</span></span>
+      <span>좋아요 <b>${fmt(v.likes)}</b> · 댓글 <b>${fmt(v.comments)}</b> · 공유 <b>${v.shares ?? "-"}</b> · 구독 <b>+${v.subs ?? "-"}</b></span>
+      <span>쇼츠 피드 <b>${pct((tr.SHORTS || 0) / tt * 100)}</b> · 검색 <b>${pct((tr.YT_SEARCH || 0) / tt * 100)}</b></span>
+      <span>비슷한 쇼츠 중 <b>${relTxt(v)}</b></span><span>구독 <b>+${v.subs ?? "-"}</b> / <b>−${v.subs_lost ?? "-"}</b></span><span>재생목록 추가 <b>${v.pl_add ?? "-"}</b></span>
+      <span>공유된 곳 <b>${Object.entries(v.sharing || {}).map(([k, n]) => `${SHARE[k] || k} ${n}`).join(" · ") || "-"}</b></span></div>
+    ${(v.top_comments || []).length ? `<div class="facts" style="display:block"><div class="dim" style="margin-bottom:4px">인기 댓글</div>${v.top_comments.map(c => `<div style="padding:3px 0;border-top:1px solid var(--grid)">${esc(c[0])} <span class="dim">♥${c[1]}</span></div>`).join("")}</div>` : ""}
+    <div class="dlg-b">
+      <div><h2>조회가 늘어난 모양</h2><p class="desc">가로 = 공개하고 지난 시간</p><div class="chart"><canvas id="dV"></canvas></div></div>
+      <div><h2>좋아요·댓글</h2><div class="legend"><span><i style="background:var(--s1)"></i>좋아요</span><span><i style="background:var(--s2)"></i>댓글</span></div><div class="chart"><canvas id="dLC"></canvas></div></div>
+      <div style="grid-column:1/-1"><h2>어디서 넘겼나</h2><p class="desc">가로 = 영상 위치, 세로 = 그 장면을 보고 있던 시청자(100% = 처음 들어온 사람 전부, 100% 넘으면 다시 보는 중) · 뚝 떨어지는 곳이 넘긴 장면</p><div class="chart"><canvas id="dR"></canvas></div></div>
+      <div style="grid-column:1/-1"><h2>비슷한 쇼츠와 비교</h2><p class="desc">영상 위치마다 같은 길이 다른 쇼츠보다 잘 붙잡았나 · 50 = 보통, 위로 갈수록 더 잘 붙잡음(유튜브 계산)</p><div class="chart"><canvas id="dRel"></canvas></div></div>
+    </div>`;
+  $(".x", dlg).onclick = () => dlg.close();
+  dlg.onclick = e => { if (e.target === dlg) dlg.close(); };
+  dlg.showModal();
+  const s1 = css("--s1"), s2 = css("--s2");
+  const line = (pts, color) => ({ data: pts, borderColor: color, backgroundColor: color, borderWidth: 2, pointRadius: 0, pointHoverRadius: 5, tension: 0.25 });
+  const linOpts = (xTitle) => baseOpts({ scales: { x: { type: "linear", grid: { display: false }, ticks: { color: css("--muted"), font: { size: 11 } }, border: { color: css("--axis") }, title: { display: !!xTitle, text: xTitle, color: css("--muted") } },
+    y: { grid: { color: css("--grid") }, ticks: { color: css("--muted"), font: { size: 11 }, callback: v => short(v) }, border: { display: false }, beginAtZero: true } } });
+  const c = v.curve || [];
+  dcharts.push(new Chart($("#dV"), { type: "line", data: { datasets: [Object.assign(line(c.map(p => ({ x: p[0], y: p[1] })), s1), { label: "조회" })] }, options: linOpts("h") }));
+  const lc = c.filter(p => p[2] != null);
+  dcharts.push(new Chart($("#dLC"), { type: "line", data: { datasets: [Object.assign(line(lc.map(p => ({ x: p[0], y: p[2] })), s1), { label: "좋아요" }), Object.assign(line(lc.map(p => ({ x: p[0], y: p[3] })), s2), { label: "댓글" })] },
+    options: Object.assign(linOpts("h"), { plugins: Object.assign(baseOpts().plugins, { tooltip: Object.assign(baseOpts().plugins.tooltip, { displayColors: true }) }) }) }));
+  if (!lc.length) $("#dLC").parentElement.insertAdjacentHTML("beforeend", "<p class='desc' style='position:absolute;top:40%;width:100%;text-align:center'>10/28 18시부터 기록 중</p>");
+  const r = v.ret || [];
+  dcharts.push(new Chart($("#dR"), { type: "line", data: { datasets: [Object.assign(line(r.map(p => ({ x: p[0] * 100, y: Math.round(p[1] * 100) })), s1), { label: "보고 있던 시청자 %" })] },
+    options: baseOpts({ scales: { x: { type: "linear", min: 0, max: 100, grid: { display: false }, ticks: { color: css("--muted"), callback: x => x + "%" }, border: { color: css("--axis") } },
+      y: { grid: { color: css("--grid") }, ticks: { color: css("--muted"), callback: y => y + "%" }, border: { display: false }, beginAtZero: true } } }) }));
+  if (!r.length) $("#dR").parentElement.insertAdjacentHTML("beforeend", "<p class='desc' style='position:absolute;top:40%;width:100%;text-align:center'>분석 데이터 아직 없음(1~2일 뒤)</p>");
+  const rl = r.filter(p => p[2] != null);
+  dcharts.push(new Chart($("#dRel"), { type: "line", data: { datasets: [
+      Object.assign(line(rl.map(p => ({ x: p[0] * 100, y: Math.round(p[2] * 100) })), s1), { label: "비슷한 쇼츠 대비" }),
+      { data: [{ x: 0, y: 50 }, { x: 100, y: 50 }], borderColor: css("--axis"), borderDash: [4, 4], borderWidth: 1, pointRadius: 0, label: "보통" }] },
+    options: baseOpts({ scales: { x: { type: "linear", min: 0, max: 100, grid: { display: false }, ticks: { color: css("--muted"), callback: x => x + "%" }, border: { color: css("--axis") } },
+      y: { min: 0, max: 100, grid: { color: css("--grid") }, ticks: { color: css("--muted") }, border: { display: false } } } }) }));
+  if (!rl.length) $("#dRel").parentElement.insertAdjacentHTML("beforeend", "<p class='desc' style='position:absolute;top:40%;width:100%;text-align:center'>분석 데이터 아직 없음(1~2일 뒤)</p>");
+}
+load();
+</script>
+</body>
+</html>
