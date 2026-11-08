@@ -134,6 +134,27 @@ dialog::backdrop { background: rgba(0,0,0,0.45); }
 .glossary b { color: var(--ink); }
 .legend { display: flex; gap: 14px; font-size: 12.5px; color: var(--ink2); margin: -4px 0 6px; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+/* 분석 탭(마크다운) */
+.md { max-width: 860px; font-size: 15px; line-height: 1.65; overflow-wrap: anywhere; }
+.md h1 { font-size: 20px; margin: 0 0 6px; letter-spacing: -0.01em; }
+.md h2 { font-size: 17px; margin: 26px 0 8px; padding-top: 14px; border-top: 1px solid var(--grid); }
+.md h3 { font-size: 15px; margin: 18px 0 6px; color: var(--ink); }
+.md h4 { font-size: 14px; margin: 14px 0 4px; color: var(--ink2); }
+.md p { margin: 0 0 10px; }
+.md ul, .md ol { margin: 0 0 10px; padding-left: 22px; }
+.md li { margin: 3px 0; }
+.md hr { border: 0; border-top: 1px solid var(--grid); margin: 18px 0; }
+.md code { font: 13px ui-monospace, Consolas, "D2Coding", monospace; background: var(--chip); padding: 1px 5px; border-radius: 5px; }
+.md blockquote { margin: 0 0 10px; padding: 4px 12px; border-left: 3px solid var(--axis); color: var(--ink2); }
+.md a { color: var(--s1); }
+.md .tbl { margin: 0 0 12px; border: 1px solid var(--grid); }
+.md table { width: auto; min-width: 100%; font-size: 13.5px; }
+.md th, .md td { text-align: left; white-space: nowrap; vertical-align: top; }
+.md td { white-space: normal; min-width: 72px; }
+.md th { cursor: default; position: static; background: var(--chip); }
+.md tbody tr { cursor: default; }
+.md tbody tr:hover { background: transparent; }
+.md .meta { color: var(--muted); font-size: 12.5px; margin: 0 0 12px; }
 </style>
 </head>
 <body>
@@ -145,7 +166,7 @@ dialog::backdrop { background: rgba(0,0,0,0.45); }
   <div class="tabs" role="tablist" id="tabs"></div>
   <main id="view"></main>
   <p class="note">조회·좋아요·댓글은 1시간마다 찍은 기록으로 3시간마다 갱신합니다. 평균 시청률·끝까지 본 %·유입·검색어·시청자는 유튜브 분석 데이터라 하루 한 번 받고, 원래 1~2일 늦게 들어옵니다(최근 영상은 '-'). 벽 단계 기준: docs/지표분석_1028.md.</p>
-  <p class="note">이 페이지는 채널 운영자가 자기 유튜브 채널(이거핫하다는데? · 윤현빈 블로그)의 업로드와 지표 확인에 쓰는 도구 issue-upload의 안내 페이지이기도 합니다. <a href="privacy.html">개인정보처리방침</a></p>
+  <p class="note">이 페이지는 채널 운영자가 자기 유튜브 채널 세 곳(이거핫하다는데? · Star Moments · 윤현빈 블로그)의 업로드와 지표 확인에 쓰는 도구 issue-upload의 안내 페이지이기도 합니다. '분석' 탭은 운영자가 쓴 진단 문서(docs/분석_*.md 최신본)입니다. <a href="privacy.html">개인정보처리방침</a></p>
 </div>
 <dialog id="dlg"></dialog>
 <script>
@@ -183,15 +204,22 @@ async function load() {
     b.onclick = () => show(c.profile);
     tabs.appendChild(b);
   });
+  // 분석 탭은 index.json(dash_build.py 가 덮어씀)에 넣지 않고 여기서 고정으로 붙인다
+  const ab = document.createElement("button");
+  ab.className = "tab"; ab.role = "tab"; ab.textContent = "분석"; ab.dataset.p = ANALYSIS;
+  ab.onclick = () => show(ANALYSIS);
+  tabs.appendChild(ab);
   let start = idx.channels[0].profile;
   try { start = localStorage.getItem("cb-tab") || start; } catch (e) {}
   start = new URLSearchParams(location.search).get("tab") || start;
-  show(idx.channels.some(c => c.profile === start) ? start : idx.channels[0].profile);
+  show(start === ANALYSIS || idx.channels.some(c => c.profile === start) ? start : idx.channels[0].profile);
 }
 
+const ANALYSIS = "analysis";
 async function show(p) {
   try { localStorage.setItem("cb-tab", p); } catch (e) {}
   document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", t.dataset.p === p));
+  if (p === ANALYSIS) { await showAnalysis(); return; }
   if (!data[p]) data[p] = await (await fetch(`data/${p}.json?` + Date.now())).json();
   current = data[p];
   render();
@@ -353,6 +381,76 @@ function chartsDraw() {
   const cty = (d.country || []).slice(0, 6), ct = cty.reduce((a, x) => a + x.views, 0) || 1;
   mk($("#cCty"), { type: "bar", data: { labels: cty.map(x => x.country), datasets: [{ data: cty.map(x => x.views), backgroundColor: s1, borderRadius: 4, borderSkipped: "start", maxBarThickness: 22 }] },
     options: baseOpts({ plugins: Object.assign(baseOpts().plugins, { tooltip: Object.assign(baseOpts().plugins.tooltip, { callbacks: { label: c => `${fmt(c.raw)}회` } }) }) }) });
+}
+
+// ── 분석 탭: data/analysis.json 의 마크다운(docs/분석_*.md 최신본)을 그린다 ──
+async function showAnalysis() {
+  charts.forEach(c => c.destroy()); charts = [];
+  const view = $("#view");
+  view.innerHTML = `<section class="card"><p class="desc">분석 문서 불러오는 중…</p></section>`;
+  let a;
+  try {
+    if (!data[ANALYSIS]) data[ANALYSIS] = await (await fetch("data/analysis.json?" + Date.now())).json();
+    a = data[ANALYSIS];
+  } catch (e) {
+    view.innerHTML = `<section class="card"><h2>분석</h2><p class="desc">분석 문서(data/analysis.json)를 아직 못 받았습니다. 다음 갱신 때 다시 보세요.</p></section>`;
+    return;
+  }
+  view.innerHTML = `<section class="card"><article class="md">
+    <p class="meta">분석 문서 ${esc(a.date || "")}${a.source ? " · " + esc(a.source) : ""} · 보드 반영 ${esc((a.updated || "").replace("T", " ").slice(0, 16))}</p>
+    ${mdRender(a.md || "")}
+  </article></section>`;
+}
+
+// 작은 마크다운 렌더러: 제목(#~####)·수평선·표·목록(-,*,1.)·인용·문단, 줄 안은 **굵게**·`코드`·[글](주소). HTML 은 전부 이스케이프.
+function mdInline(s) {
+  let t = esc(s);
+  t = t.replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`);
+  t = t.replace(/\*\*([^*]+?)\*\*/g, "<b>$1</b>");
+  t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  return t;
+}
+function mdRender(src) {
+  const lines = src.replace(/\r\n?/g, "\n").split("\n"), out = [];
+  const isRow = l => /^\s*\|.*\|\s*$/.test(l);
+  const cells = l => l.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(c => c.trim());
+  const isSep = l => isRow(l) && cells(l).every(c => /^:?-{3,}:?$/.test(c));
+  let i = 0, para = [];
+  const flush = () => { if (para.length) { out.push(`<p>${mdInline(para.join(" "))}</p>`); para = []; } };
+  while (i < lines.length) {
+    const l = lines[i];
+    if (!l.trim()) { flush(); i++; continue; }
+    let m;
+    if ((m = /^(#{1,4})\s+(.*)$/.exec(l))) { flush(); const n = m[1].length; out.push(`<h${n}>${mdInline(m[2].replace(/\s+#+$/, ""))}</h${n}>`); i++; continue; }
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(l)) { flush(); out.push("<hr>"); i++; continue; }
+    if (isRow(l) && i + 1 < lines.length && isSep(lines[i + 1])) {
+      flush();
+      const head = cells(l); i += 2; const rows = [];
+      while (i < lines.length && isRow(lines[i])) { rows.push(cells(lines[i])); i++; }
+      out.push(`<div class="tbl"><table><thead><tr>${head.map(c => `<th>${mdInline(c)}</th>`).join("")}</tr></thead><tbody>${rows.map(r => `<tr>${head.map((_, k) => `<td>${mdInline(r[k] || "")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
+      continue;
+    }
+    if ((m = /^\s*([-*+]|\d+[.)])\s+/.exec(l))) {
+      flush();
+      const ordered = /\d/.test(m[1]), items = [];
+      while (i < lines.length && (m = /^\s*([-*+]|\d+[.)])\s+(.*)$/.exec(lines[i])) && /\d/.test(m[1]) === ordered) {
+        let item = m[2]; i++;
+        while (i < lines.length && /^\s{2,}\S/.test(lines[i]) && !/^\s*([-*+]|\d+[.)])\s+/.test(lines[i])) { item += " " + lines[i].trim(); i++; }
+        items.push(`<li>${mdInline(item)}</li>`);
+      }
+      out.push(`<${ordered ? "ol" : "ul"}>${items.join("")}</${ordered ? "ol" : "ul"}>`);
+      continue;
+    }
+    if (/^\s*>\s?/.test(l)) {
+      flush(); const q = [];
+      while (i < lines.length && /^\s*>\s?/.test(lines[i])) { q.push(lines[i].replace(/^\s*>\s?/, "")); i++; }
+      out.push(`<blockquote>${mdInline(q.join(" "))}</blockquote>`);
+      continue;
+    }
+    para.push(l.trim()); i++;
+  }
+  flush();
+  return out.join("\n");
 }
 
 let dcharts = [];
