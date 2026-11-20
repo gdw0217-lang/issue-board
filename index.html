@@ -169,6 +169,40 @@ dialog::backdrop { background: rgba(0,0,0,0.45); }
 .stbl tr:last-child td { border-bottom: 0; }
 .stbl.g td:first-child, .stbl.g th:first-child { min-width: 128px; white-space: normal; }
 .seg { display: flex; gap: 6px; margin: 0 0 12px; overflow-x: auto; }
+/* 예약표 탭 */
+.sch { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--grid); border-radius: 10px; }
+.sch table { min-width: 560px; table-layout: fixed; }
+.sch th, .sch td { text-align: left; vertical-align: top; white-space: normal; }
+.sch th { cursor: default; background: var(--chip); }
+.sch th.tm, .sch td.tm { width: 92px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sch td.tm b { font-size: 15px; }
+.sch td.tm span { display: block; color: var(--muted); font-size: 12px; }
+.sch tbody tr { cursor: default; }
+.sch tbody tr:hover { background: transparent; }
+.sch tr.day td { background: var(--surface); color: var(--ink2); font-weight: 600; font-size: 13px; padding: 6px 8px; }
+.sch tr.now td { border-top: 2px solid var(--s1); }
+.sch tr.past .cell { opacity: 0.62; }
+.sch .cell { border-radius: 10px; padding: 7px 9px; line-height: 1.35; font-size: 13.5px; }
+.sch .cell .k { font-size: 11.5px; font-weight: 600; margin-bottom: 2px; display: flex; gap: 6px; align-items: center; }
+.sch .cell .m { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.sch .cell a { color: inherit; }
+.sch .c-pub { background: var(--chip); } .sch .c-pub .k { color: var(--ink2); }
+.sch .c-sch { background: rgba(42,120,214,0.10); } .sch .c-sch .k { color: var(--s1); }
+.sch .c-wait { background: rgba(250,178,25,0.16); } .sch .c-wait .k { color: #9a6700; }
+.sch .c-plan { border: 1px dashed var(--axis); } .sch .c-plan .k { color: var(--ink2); }
+.sch .close { color: var(--crit); font-weight: 600; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .sch .c-wait .k { color: var(--warn); } }
+:root[data-theme="dark"] .sch .c-wait .k { color: var(--warn); }
+.sch-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 12.5px; color: var(--ink2); margin: 10px 0 0; }
+.sch-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 4px; margin-right: 6px; vertical-align: -2px; }
+@media (max-width: 720px) {
+  .sch table { min-width: 0; }
+  .sch th, .sch td { padding: 6px 5px; }
+  .sch th.tm, .sch td.tm { width: 50px; }
+  .sch td.tm b { font-size: 13.5px; }
+  .sch .cell { padding: 6px 7px; font-size: 12.5px; border-radius: 8px; }
+  .sch .cell .k { flex-wrap: wrap; gap: 0 6px; }
+}
 .badkey { display: inline-block; width: 10px; height: 10px; border-radius: 3px; background: var(--crit); margin-right: 6px; vertical-align: -1px; }
 @media (max-width: 720px) {
   .stbl td.title { width: 150px; min-width: 150px; max-width: 150px; }
@@ -225,6 +259,10 @@ async function load() {
     tabs.appendChild(b);
   });
   // 분석 탭은 index.json(dash_build.py 가 덮어씀)에 넣지 않고 여기서 고정으로 붙인다
+  const rb = document.createElement("button");
+  rb.className = "tab"; rb.role = "tab"; rb.textContent = "예약표"; rb.dataset.p = SCHED;
+  rb.onclick = () => show(SCHED);
+  tabs.appendChild(rb);
   const sb = document.createElement("button");
   sb.className = "tab"; sb.role = "tab"; sb.textContent = "싫어하는 신호"; sb.dataset.p = DISLIKE;
   sb.onclick = () => show(DISLIKE);
@@ -236,15 +274,16 @@ async function load() {
   let start = idx.channels[0].profile;
   try { start = localStorage.getItem("cb-tab") || start; } catch (e) {}
   start = new URLSearchParams(location.search).get("tab") || start;
-  show(start === ANALYSIS || start === DISLIKE || idx.channels.some(c => c.profile === start) ? start : idx.channels[0].profile);
+  show(start === ANALYSIS || start === DISLIKE || start === SCHED || idx.channels.some(c => c.profile === start) ? start : idx.channels[0].profile);
 }
 
-const ANALYSIS = "analysis", DISLIKE = "dislike";
+const ANALYSIS = "analysis", DISLIKE = "dislike", SCHED = "schedule";
 async function show(p) {
   try { localStorage.setItem("cb-tab", p); } catch (e) {}
   document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", t.dataset.p === p));
   if (p === ANALYSIS) { await showAnalysis(); return; }
   if (p === DISLIKE) { await showDislike(); return; }
+  if (p === SCHED) { await showSched(); return; }
   if (!data[p]) data[p] = await (await fetch(`data/${p}.json?` + Date.now())).json();
   current = data[p];
   render();
@@ -409,6 +448,54 @@ function chartsDraw() {
 }
 
 // ── 싫어하는 신호 탭: data/dislike.json(dash_build.py signals) — '관심 없음' 대신 볼 수 있는 간접 숫자 ──
+// 예약표 — data/schedule.json(work/sched_build.py, 1시간마다): 공개·예약됨·대기(1시간 전 자동 업로드)·계획(work/sched_plan.json)
+async function showSched() {
+  charts.forEach(c => c.destroy()); charts = [];
+  const view = $("#view");
+  view.innerHTML = `<section class="card"><p class="desc">불러오는 중…</p></section>`;
+  let S;
+  try { S = data[SCHED] = data[SCHED] || await (await fetch("data/schedule.json?" + Date.now())).json(); }
+  catch (e) { view.innerHTML = `<section class="card"><h2>예약표</h2><p class="desc">데이터(data/schedule.json)를 아직 못 받았습니다. 다음 갱신 때 다시 보세요.</p></section>`; return; }
+  const chs = S.channels, sum = S.summary;
+  const CLS = { "공개": "c-pub", "예약됨": "c-sch", "대기": "c-wait", "계획": "c-plan" };
+  const KIND = { "공개": "공개", "예약됨": "예약됨", "대기": "대기 · 자동 업로드", "계획": "계획 · 아직 영상 없음" };
+  const kpis = chs.map(c => { const s = sum[c.profile] || {};
+    return `<div class="card kpi"><div class="lab">${esc(c.name)} 다음 공개</div><div class="val">${s.next ? esc(s.next.slice(6)) : "없음"}</div>
+      <div class="sub">${s.next ? esc(s.next.slice(0, 5)) + " · " : ""}올려 둔 편 ${s.ready || 0} · 계획 ${s.plan || 0}</div></div>`; }).join("")
+    + chs.map(c => { const s = sum[c.profile] || {};
+    return `<div class="card kpi"><div class="lab">${esc(c.name)} 올려 둔 편 끝</div><div class="val">${s.last_ready ? esc(s.last_ready.slice(6)) : "-"}</div>
+      <div class="sub">${s.last_ready ? esc(s.last_ready.slice(0, 5)) + " 까지 · " : ""}마지막 공개 ${esc(s.last_pub || "-")}</div></div>`; }).join("");
+  let rows = "", lastDay = null, nowDone = false;
+  const oldN = S.grid.filter(r => r.date < S.today).length;
+  for (const r of S.grid) {
+    if (r.date < S.today && !schOld) continue;
+    if (r.day !== lastDay) { rows += `<tr class="day"><td colspan="${chs.length + 1}">${esc(r.day)} (${esc(r.dow)})</td></tr>`; lastDay = r.day; }
+    const nowCls = !r.past && !nowDone ? (nowDone = true, " now") : "";
+    rows += `<tr class="${r.past ? "past" : ""}${nowCls}"><td class="tm"><b>${esc(r.time)}</b>${nowCls ? `<span>지금 ${esc(S.now.slice(6))} 다음</span>` : ""}</td>`;
+    for (const c of chs) {
+      const x = r.cells[c.profile];
+      if (!x) { rows += `<td></td>`; continue; }
+      const t = x.url ? `<a href="${x.url}" target="_blank" rel="noopener">${esc(x.title || x.key || "")}</a>` : esc(x.title || "(제목 미정)");
+      const meta = [x.key, x.views != null ? fmt(x.views) + "회" : "", x.note].filter(Boolean).map(esc).join(" · ");
+      const close = r.close.includes(c.profile) ? `<span class="close">앞 편과 1시간 안</span>` : "";
+      rows += `<td><div class="cell ${CLS[x.kind] || ""}"><div class="k">${esc(KIND[x.kind] || x.kind)}${close}</div>${t}${meta ? `<div class="m">${meta}</div>` : ""}</div></td>`;
+    }
+    rows += `</tr>`;
+  }
+  view.innerHTML = `<div class="grid kpis">${kpis}</div>
+  <section class="card" style="margin-top:12px">
+    <h2>예약표 현황</h2><p class="desc">어제부터 사흘 뒤까지 · 유튜브에 실제로 있는 편 + 작업 스케줄러의 업로드 대기 + 팀장이 적어 둔 계획 · 갱신 ${esc(S.updated.slice(5))}</p>
+    ${S.errors && S.errors.length ? `<p class="desc lo">${S.errors.map(esc).join("<br>")}</p>` : ""}
+    ${oldN ? `<div class="tools" style="margin:0 0 10px"><button class="tab" id="schOld">${schOld ? "어제 편 접기" : `어제 편도 보기 (${oldN})`}</button></div>` : ""}
+    <div class="sch"><table><thead><tr><th class="tm">시각</th>${chs.map(c => `<th>${esc(c.name)}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="sch-legend"><span><i style="background:var(--chip)"></i>공개(조회수)</span><span><i style="background:rgba(42,120,214,0.18)"></i>예약됨 — 유튜브에 이미 올림</span>
+      <span><i style="background:rgba(250,178,25,0.28)"></i>대기 — 공개 1시간 전 자동 업로드</span><span><i style="border:1px dashed var(--axis)"></i>계획 — 아직 영상 없음</span></div>
+  </section>`;
+  const ob = $("#schOld");
+  if (ob) ob.onclick = () => { schOld = !schOld; showSched(); };
+}
+let schOld = false;
+
 let sgCh = null, sgKey = null, sgDir = -1, sgAll = false;
 const p1 = (x, d = 1) => x == null ? "<span class='dim'>-</span>" : (x * 100).toFixed(d) + "%";
 const n1 = (x, d = 1) => x == null ? "<span class='dim'>-</span>" : Number(x).toLocaleString("ko-KR", { minimumFractionDigits: d, maximumFractionDigits: d });
